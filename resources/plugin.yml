@@ -1,0 +1,12 @@
+name: ResourcePackManagerCustomNameplatesBridge
+version: 1.0.1
+main: io.codex.rpmcnbridge.ResourcePackManagerCustomNameplatesBridge
+api-version: '1.21'
+author: Codex
+prefix: 资源包管理器-自定义名牌桥接
+description: Bridge CustomNameplates ResourcePack output into ResourcePackManager using the official API.
+depend:
+  - ResourcePackManager
+softdepend:
+  - CustomNameplates
+folia-supported: true

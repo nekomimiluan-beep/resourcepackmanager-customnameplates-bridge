@@ -1,0 +1,17 @@
+# 资源包管理器-自定义名牌桥接
+#
+# 作用：
+#   让 ResourcePackManager 通过官方 API 识别 CustomNameplates 生成的 ResourcePack 目录，
+#   并把自定义名牌、聊天气泡、字体图片等资源合并进最终发给客户端的资源包。
+#
+# 注意：
+#   custom-nameplates-plugin-name 必须与 /plugins 里显示的插件名一致，默认就是 CustomNameplates。
+#   resource-pack-local-path 是相对 plugins 目录的路径，不要写服务器绝对路径。
+
+custom-nameplates-plugin-name: CustomNameplates
+resource-pack-local-path: CustomNameplates/ResourcePack
+encrypts: false
+distributes: false
+zips: false
+custom-nameplates-reload-command: nameplates reload
+max-registration-attempts: 30
