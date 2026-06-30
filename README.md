@@ -14,13 +14,13 @@
   - `localPath = CustomNameplates/ResourcePack`
   - `zips = false`
 - 让 ResourcePackManager 后续自动压缩、合并和发送资源包。
-- 支持启动顺序变化和插件热加载：依赖插件稍后启用时会重新尝试注册。
+- 通过 `loadbefore: ResourcePackManager` 抢在 ResourcePackManager 首次合并前完成注册，避免启动时出现两轮资源包合并互相抢 `output` 目录。
 - 不修改 `ResourcePackManager` 或 `CustomNameplates` 原 jar，删除本桥接插件即可撤销联动。
 
 ## 为什么需要它
 
 `ResourcePackManager/config.yml` 里的 `priorityOrder` 只决定合并优先级，不会自动发现 CustomNameplates 的资源包目录。  
-ResourcePackManager 官方 API 要求其他插件在运行时调用 `registerLocalResourcePack(...)` 注册资源包。本插件就是专门补上这一步。
+ResourcePackManager 官方 API 要求其他插件在运行时调用 `registerLocalResourcePack(...)` 注册资源包。本插件就是专门补上这一步，并且尽量在 ResourcePackManager 首次打包前完成注册。
 
 ## 安装
 
@@ -102,7 +102,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1 `
 构建产物默认输出到：
 
 ```text
-build/jar/ResourcePackManagerCustomNameplatesBridge-1.0.1[资源包管理器-自定义名牌桥接].jar
+build/jar/ResourcePackManagerCustomNameplatesBridge-1.0.2[资源包管理器-自定义名牌桥接].jar
 ```
 
 ## 实现说明
@@ -120,7 +120,9 @@ ResourcePackManagerAPI.registerLocalResourcePack(
 );
 ```
 
-插件只负责注册，不主动并发触发 ResourcePackManager 的合并任务，避免和 ResourcePackManager 自身的稳定检测/合并线程发生冲突。
+插件只负责注册，不主动并发触发 ResourcePackManager 的合并任务。
+
+1.0.2 起，本插件会在 Bukkit 加载顺序上排到 ResourcePackManager 前面，并通过 `PluginEnableEvent` 在 ResourcePackManager 刚启用时立即注册 CustomNameplates，避免注册太晚造成 ResourcePackManager 启动期两次混合任务重叠。
 
 ## 适用环境
 

@@ -1,6 +1,6 @@
 param(
     [string]$ServerDir = "H:\mcziyou-1.21.1-Server",
-    [string]$Version = "1.0.1"
+    [string]$Version = "1.0.2"
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,7 +15,8 @@ $ResourcePackManagerJar = Get-ChildItem -LiteralPath (Join-Path $ServerDir "plug
     Select-Object -First 1 -ExpandProperty FullName
 $ClassesDir = Join-Path $ProjectDir "build\classes"
 $JarDir = Join-Path $ProjectDir "build\jar"
-$OutputJar = Join-Path $JarDir "ResourcePackManagerCustomNameplatesBridge-$Version.jar"
+$ChineseName = -join ([char[]]@(36164, 28304, 21253, 31649, 29702, 22120, 45, 33258, 23450, 20041, 21517, 29260, 26725, 25509))
+$OutputJar = Join-Path $JarDir "ResourcePackManagerCustomNameplatesBridge-$Version[$ChineseName].jar"
 
 foreach ($RequiredPath in @($Javac, $Jar, $BukkitApi, $ResourcePackManagerJar)) {
     if (-not (Test-Path -LiteralPath $RequiredPath)) {

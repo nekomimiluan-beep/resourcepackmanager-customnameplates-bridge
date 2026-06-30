@@ -1,7 +1,7 @@
 package io.codex.rpmcnbridge;
 
-import com.magmaguy.resourcepackmanager.api.ResourcePackManagerAPI;
 import java.io.File;
+import java.lang.reflect.Method;
 import java.util.Locale;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
@@ -29,14 +29,15 @@ public final class ResourcePackManagerCustomNameplatesBridge extends JavaPlugin 
     private int retryTaskId = -1;
     private int attempts;
     private int maxAttempts;
+    private boolean registered;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         loadBridgeConfig();
         Bukkit.getPluginManager().registerEvents(this, this);
-        getLogger().info("中文名：资源包管理器-自定义名牌桥接。正在等待 CustomNameplates 资源包输出。");
-        startRegistrationAttempts(20L);
+        getLogger().info("中文名：资源包管理器-自定义名牌桥接。正在等待 ResourcePackManager 启用后立即注册 CustomNameplates 资源包。");
+        startRegistrationAttempts(0L);
     }
 
     @Override
@@ -48,8 +49,9 @@ public final class ResourcePackManagerCustomNameplatesBridge extends JavaPlugin 
     public void onPluginEnable(PluginEnableEvent event) {
         String enabledName = event.getPlugin().getName();
         if (equalsPluginName(enabledName, pluginName) || equalsPluginName(enabledName, "ResourcePackManager")) {
-            // 兼容插件热加载或启动顺序变化：任一依赖稍后启用时重新尝试注册。
-            startRegistrationAttempts(20L);
+            // ResourcePackManager 会在启用时启动自己的稳定检测线程；这里必须尽快注册，
+            // 让 CustomNameplates 能赶上 ResourcePackManager 的首次合并，避免启动后追加注册导致两轮合并重叠。
+            startRegistrationAttempts(0L);
         }
     }
 
@@ -66,14 +68,25 @@ public final class ResourcePackManagerCustomNameplatesBridge extends JavaPlugin 
     }
 
     private void startRegistrationAttempts(long delayTicks) {
+        if (registered) {
+            return;
+        }
         cancelRetryTask();
         attempts = 0;
-        // CustomNameplates 启动时会生成 ResourcePack 目录；这里短间隔重试，
-        // 避免目录还没写完时就向 ResourcePackManager 注册失败。
-        retryTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(this, this::tryRegister, delayTicks, 40L);
+        tryRegister();
+        if (!registered && retryTaskId == -1) {
+            // CustomNameplates 启动时会生成 ResourcePack 目录；这里短间隔重试，
+            // 但第一次尝试不延迟，尽量赶在 ResourcePackManager 首次打包前完成 API 注册。
+            retryTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(this, this::tryRegister, Math.max(1L, delayTicks), 20L);
+        }
     }
 
     private void tryRegister() {
+        if (registered) {
+            cancelRetryTask();
+            return;
+        }
+
         attempts++;
 
         Plugin resourcePackManager = Bukkit.getPluginManager().getPlugin("ResourcePackManager");
@@ -96,13 +109,15 @@ public final class ResourcePackManagerCustomNameplatesBridge extends JavaPlugin 
 
         try {
             // zips=false 表示注册的是未压缩目录，让 ResourcePackManager 在合并前自行压缩。
-            ResourcePackManagerAPI.registerLocalResourcePack(
+            registerLocalResourcePackReflectively(
+                    resourcePackManager.getClass().getClassLoader(),
                     pluginName,
                     normalizePath(localPath),
                     encrypts,
                     distributes,
                     zips,
                     reloadCommand == null || reloadCommand.isBlank() ? null : reloadCommand);
+            registered = true;
             cancelRetryTask();
             getLogger().info("已把 " + normalizePath(localPath) + " 注册给 ResourcePackManager，注册名：" + pluginName + "。");
         } catch (Throwable throwable) {
@@ -119,6 +134,32 @@ public final class ResourcePackManagerCustomNameplatesBridge extends JavaPlugin 
             getLogger().warning("Gave up registering CustomNameplates resource pack after " + attempts + " attempts.");
             cancelRetryTask();
         }
+    }
+
+    private static void registerLocalResourcePackReflectively(
+            ClassLoader resourcePackManagerClassLoader,
+            String pluginName,
+            String localPath,
+            boolean encrypts,
+            boolean distributes,
+            boolean zips,
+            String reloadCommand)
+            throws Exception {
+        // 本插件需要排在 ResourcePackManager 前面启用，才能赶上它的首次合并。
+        // 这里用 ResourcePackManager 自己的类加载器反射调用官方 API，避免 Bukkit 在提前加载本插件类时就强制解析 API 类。
+        Class<?> apiClass = Class.forName(
+                "com.magmaguy.resourcepackmanager.api.ResourcePackManagerAPI",
+                true,
+                resourcePackManagerClassLoader);
+        Method method = apiClass.getMethod(
+                "registerLocalResourcePack",
+                String.class,
+                String.class,
+                boolean.class,
+                boolean.class,
+                boolean.class,
+                String.class);
+        method.invoke(null, pluginName, localPath, encrypts, distributes, zips, reloadCommand);
     }
 
     private void cancelRetryTask() {
